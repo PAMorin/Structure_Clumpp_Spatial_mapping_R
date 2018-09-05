@@ -1,0 +1,255 @@
+---
+title: "Structure"
+output:
+  html_document:
+    number_sections: yes
+    toc: yes
+    toc_depth: '2'
+  word_document:
+    toc: yes
+    toc_depth: '2'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+## load libraries
+###Not on CRAN: devtools::install_github(‘ericarcher/stratag’) ###devtools::install_github(‘ericarcher/swfscMisc’) ###devtools::install_github(“thierrygosselin/radiator”) ###devtools::install_github(“bcm-uga/LEA”)
+###devtools::install_github(“bcm-uga/TESS3_encho_sen”) 
+```{r echo=TRUE, results='hide', message=FALSE, warning=FALSE} 
+rm(list = ls())
+# install.packages("devtools")
+#devtools::install_github("bcm-uga/TESS3_encho_sen")
+library(tidyverse)
+library(tess3r)
+library(maps)
+library(ggplot2)
+library(rworldmap)
+library(strataG)
+library(swfscMisc)
+library(radiator)
+library(fields)
+library(RColorBrewer)
+library(mapplots)
+library(LEA)
+library(marmap)
+library(raster)
+paste("working directory is:")
+getwd()
+```
+
+## load genotype data and stratification schemes
+### stratify the data and remove loci that are monomorphic in the strata.
+```{r}
+stratum <- "Wcoast4_num"
+title <- "Ppho" #
+dir.create(paste0(title,"_",stratum,"_structure_clumpp_files"))
+  dir <- paste0(title,"_",stratum,"_structure_clumpp_files")
+#dir.create(paste(title,"_",stratum, sep = ""))
+
+# read genotypes data file (diploid, codominant); in directory above current directory
+# Format = 1st column = labid, 2 columns per locus
+gdata <- read.csv("../../SNP151-microhaplo_QA_292_loci_split_final_genotable.csv", header = TRUE) 
+#sample id column = 'labid', missing data as NA, 00, 000, -999
+
+# read stratification file (includes lat/lon coordinates)
+# in directory above current directory
+# required columns for labid, Latitude, Longitude. After that, each column is a stratification scheme with 
+#  strata names for each sample in the strata.
+coord <- read.csv("../../Q_Ppho_samples_strata_270618.csv", header = TRUE, na.strings=c("","NA"))
+# change labid column header name
+colnames(coord)[colnames(coord) == "LABID"] <- "labid"
+
+# combine data with coordinates (files can be different lengths)
+# select the specified stratum along with labid, Latitude and Longitude from the strata file
+strata.df.names <- c("labid", "Latitude", "Longitude", stratum)
+coord.strat <- coord[,colnames(coord) %in% strata.df.names]
+# then merge dataframes based on "labid" being a column name in both dataframes
+data <- merge(coord.strat,gdata)
+# remove sample data if not included in the specified strata
+data2 <- data %>% drop_na(stratum)
+# remove sample data if it doesn't have lat/lon
+data2 <- data2 %>% drop_na(Latitude)
+# Remove monomorphic loci then ane write a file of monomorphic loci for this stratification scheme.
+other<-data2 %>% dplyr::select(labid, Latitude, Longitude) #create dataframe to add Lat/Lon to gtypes object
+g <- df2gtypes(data2, #this creates a df with 2 columns for id and hap
+               ploidy = 2,
+               id.col = 1,
+               strata.col = 4,
+               loc.col = 5,
+               other = other,
+               description = title)
+alleleNum<-numAlleles(g)
+not.mono <- names(alleleNum)[alleleNum > 1]
+not.mono.g <- g[, not.mono, ]
+not.mono.df <- as.data.frame(not.mono.g)
+not.mono.df$labid<-not.mono.df$ids
+not.mono.df$ids<-NULL
+# Add the lat/lon data back to the dataframe
+data3<-merge(not.mono.df,other)
+# re-order the dataframe to put Lat/Lon columns after labid's
+latlon <- c("labid", "Latitude", "Longitude")
+data3 <- data3[, c(latlon, setdiff(names(data3), latlon))]
+data3 <- data3 %>% arrange(desc(strata), labid) # sort by species column (decreasing) so that hybrids show up on map
+
+# save list of monomorphic loci to a .csv file
+mono<-alleleNum < 2
+monoloc<-names(mono) [which(mono==TRUE)]
+write.csv(monoloc, paste0(dir,"/",stratum,"_monomorphic_loci.csv"))
+cat("there were", length(monoloc), "monomorphic loci, saved to file:", paste0(stratum,"_monomorphic_loci.csv"))
+
+# set the modified data file as the default database in R search path
+attach(data3) 
+
+data3[1:10,1:10]
+```
+
+##Map the data points
+```{r echo=FALSE, fig.height=8, fig.width=8}
+sample2.map<-function (lat, lon, lat.range, lon.range, main = NULL, 
+                       pch = 19, pt.cex = 1, col = "black", bg = col, 
+                       n = 5, lon.n = n, lat.n = n) 
+{
+  has.loc <- !is.na(lon) & !is.na(lat)
+  in.lon.range <- lon >= min(lon.range) & lon <= max(lon.range)
+  in.lat.range <- lat >= min(lat.range) & lat <= max(lat.range)
+  to.plot <- has.loc & in.lon.range & in.lat.range
+  if (!is.null(main)) 
+    main <- paste(main, " (n = ", sum(to.plot), ")", sep = "")
+  if (length(pch) == length(lon)) 
+    pch <- pch[to.plot]
+  if (length(pt.cex) == length(lon)) 
+    pt.cex <- pt.cex[to.plot]
+  if (length(col) == length(lon)) 
+    col <- col[to.plot]
+  op <- par(mar = c(3, 5, ifelse(is.null(main), 3, 5), 5) + 
+              0.1, oma = c(1, 1, 1, 1))
+  map("world2Hires", xlim = lon.range, 
+      ylim = lat.range)
+  points(lon[to.plot], lat[to.plot], pch = pch, cex = pt.cex, 
+         col = col, bg = bg)
+  #lat.lon.axes(lon.range, lat.range, n = n, lon.n = lon.n, 
+  #             lat.n = lat.n)
+  if (!is.null(main)) 
+    mtext(main, line = 3, cex = 1.5)
+  box(lwd = 2)
+  #invisible(op)
+}
+
+#pop_number <- #list of numbers, 1 to the total number of populations in the strata
+  # build a color list for the number of populations in this stratification scheme
+
+# add a column for 360° mapping
+Lon360 <- ifelse(data3$Longitude < 0, 360 + data3$Longitude, data3$Longitude)
+data3_Lon360 <- cbind(data3, Lon360)
+lat_min <- min(data3_Lon360$Latitude)
+lat_max <- max(data3_Lon360$Latitude)
+lon_min <- min(data3_Lon360$Lon360)
+lon_max <- max(data3_Lon360$Lon360)
+    
+lat.range <- c(lat_min - 2, lat_max + 2)
+lon.range <- c(lon_min - 2, lon_max + 2)
+n<-5
+
+# NOT USED: could develop to select colors based on number of strata and apply to the map.
+#type.col <- "red" 
+#type.pch <- 21
+#create named vectors where the names match the values in the "type" column of 
+#the input data file, and each type is assigned a color and shape.
+#sample2.map(data3_Lon360$Latitude, data3_Lon360$Lon360, lat.range, lon.range, n = n, 
+#           bg = type.col[data3_Lon360$strata], pch = type.pch[data3_Lon360$strata])
+
+sample2.map(data3_Lon360$Latitude, data3_Lon360$Lon360, lat.range, lon.range, n = n, 
+           bg = "black", col = "blue")
+
+```
+
+## Structure analysis 
+(currently low numreps, as it takes a long time to run (~30 min with low reps; days at suggested reps))
+```{r results='hide', message=FALSE, cache=TRUE}
+num.cores <- 2
+description <- title #name for output files
+Ploidy<-2
+max.k <- 6
+rep.k <- 5 #recommend 20 after testing
+pop.prior <- "locprior"  #population prior mode; "locprior" or "usepopinfo". 
+  #usepopinfo use sampling locations to test for migrants or hybrids,
+    #for use with data sets where the data are very informative. 
+  #locprior uses the populations in the designated strata as the locations; 
+  #for no loc. prior., delete "pop.prior=pop.prior" from the structure.run parameters
+  #below. Use of NULL in locprior causes CLUMPP to fail sometimes.
+freqscorr <- TRUE  #logical. Correlated allele frequencies = TRUE; uncorrelated = FALSE
+noadmix <- FALSE  #logical. No admixture = TRUE, admixture = FALSE
+burnin <- 50 #recommend 50000 after testing
+numreps <- 100 #recommend ≥100000 after testing
+clumpp.reps <- 10 #100 recommended
+
+sr <- structureRun(g, k.range = 1:max.k, num.k.rep = rep.k, delete.files = TRUE,
+                    in.folder = TRUE, label = paste(description, "_",stratum, "_",max.k, sep=""),
+                    burnin = burnin, numreps = numreps, noadmix = noadmix,
+                    freqscorr = freqscorr, num.cores = num.cores, pop.prior = pop.prior) #, pop.prior = pop.prior
+save.image(file = paste(dir,"/",description, "_",stratum, "_sr",".rdata",sep = ""))
+
+# Calculate Evanno metrics
+pdf(file=paste(dir,"/",description, "_",stratum, "_",max.k, ".evno.plots.pdf", sep = ""))
+ evno <- evanno(sr)
+ dev.off()
+print(evno)
+#save(evno, file = paste(description,"_evno", ".rdata",sep=""))
+write.csv(evno$df, file = paste(dir,"/",description, "_",stratum, "_k",max.k, ".evno.results.csv", sep = ""))
+```
+## get map information and set up map structure
+```{r fig.width=8, fig.height=6, cache=TRUE}
+#convert the longitude data to 360°.
+coord_map <- cbind(data3_Lon360$Lon360, data3_Lon360$Latitude)
+my.colors <- c('indianred1','mediumpurple1','yellow1','darkolivegreen1',
+                'deepskyblue2','orange','pink2', 'seagreen2') # only up to k=8; add more if needed.
+my.palette <- CreatePalette(my.colors, 4)
+
+## get the NOAA map (change lon and lat coordinates and resolution, see help)
+# use antimeridian = TRUE to center on antimeridian (Pacific Ocean)
+map.bathy <- marmap::getNOAA.bathy(lon1=160, lon2= -110, lat1= 30, lat2= 74, res = 10, keep=TRUE, antimeridian = TRUE)
+
+# change sign (I think this inverts land/water color surface)
+map.bathy1 <-  - map.bathy
+
+# convert bathy to raster (package = raster)
+asc.raster <- marmap::as.raster(map.bathy1)
+
+#rewrite the modified raster in your working directory
+raster::writeRaster(asc.raster, "myraster.asc", overwrite=TRUE)
+```
+
+## Run clumpp on structure iterations, plot barplots and map spatial interpolation of ancestry coefficient from STRUCTURE
+```{r fig.height=5, fig.width=10, cache=TRUE}
+#pdf(file=paste(description, "_",stratum, "_", ".structure_qmatrix.pdf",
+                # sep = ""), width = 10, height = 3, paper = "USr")
+for(k in 2:max.k) {
+  clumpp <- clumpp(sr, k, align.algorithm = "greedy", 
+                     greedy.option = "ran.order", repeats = clumpp.reps,
+                     sim.stat = "g", delete.files = TRUE, label=description)
+  #print(clumpp)
+save(clumpp, file = paste(dir,"/",description,"_clumpp_",k, ".rdata",sep=""))
+write.csv(clumpp, file = paste(dir,"/",description,"_",stratum,"_clumpp_",k, ".csv",sep=""))
+# Plot CLUMPP results and print out each chart for k=1-max.k 
+#  pdf(paste(description, "_",stratum,"_K", k, "sort.pdf", sep = ""), width = 11, height = 8.5)
+    barcolors = my.colors 
+    plot <- structurePlot(clumpp, sort.probs = FALSE, col = barcolors, type = "bar", horiz = FALSE)
+  
+# make a qmatrix like the one from TESS (convert qmatrix to Tess object with as.qumatrix)
+q.matrix2 <- as.qmatrix(clumpp[,-(1:3)]) 
+
+# plot the spatial interpolation of ancestry coefficient
+op <- par(mar = .1+ c(1,16,1,16)) # use mar to change the width/height ratio of the map.
+# c(bottom, left, top, right) which gives the number of lines of margin to be specified on the four sides of the plot. The default is c(5, 4, 4, 2) + 0.1.
+Npac<-plot(q.matrix2, coord_map, method = "map.max", cex = .5, raster.filename = "myraster.asc", interpol = FieldsKrigModel(10), main = paste0("Ancestry coefficients, k=",k), resolution = c(300, 300), col.palette = my.palette, xlab = "Longitude", ylab = "Latitude")
+par(op)
+}
+#dev.off()
+
+# save an rdata file of the r environment
+save.image(file = paste0(dir,"/",title,"_",stratum,"_structure_test.rdata"))
+```
+
+end
+
