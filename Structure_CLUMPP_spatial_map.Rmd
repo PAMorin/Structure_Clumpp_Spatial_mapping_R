@@ -56,7 +56,7 @@ gdata <- read.csv("../../SNP151-microhaplo_QA_292_loci_split_final_genotable.csv
 # in directory above current directory
 # required columns for labid, Latitude, Longitude. After that, each column is a stratification scheme with 
 #  strata names for each sample in the strata.
-coord <- read.csv("../../Q_Ppho_samples_strata_270618.csv", header = TRUE, na.strings=c("","NA"))
+coord <- read.csv("../../Strata_example_Ppho.csv", header = TRUE, na.strings=c("","NA"))
 # change labid column header name
 colnames(coord)[colnames(coord) == "LABID"] <- "labid"
 
