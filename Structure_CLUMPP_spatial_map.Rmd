@@ -49,7 +49,7 @@ dir.create(paste0(title,"_",stratum,"_structure_clumpp_files"))
 
 # read genotypes data file (diploid, codominant); in directory above current directory
 # Format = 1st column = labid, 2 columns per locus
-gdata <- read.csv("../../SNP151-microhaplo_QA_292_loci_split_final_genotable.csv", header = TRUE) 
+gdata <- read.csv("../../example_100_loci_genotable.csv", header = TRUE) 
 #sample id column = 'labid', missing data as NA, 00, 000, -999
 
 # read stratification file (includes lat/lon coordinates)
