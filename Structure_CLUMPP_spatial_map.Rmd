@@ -228,7 +228,12 @@ for(k in 2:max.k) {
   clumpp <- clumpp(sr, k, align.algorithm = "greedy", 
                      greedy.option = "ran.order", repeats = clumpp.reps,
                      sim.stat = "g", delete.files = TRUE, label=description)
-  #print(clumpp)
+
+# Sort clummp orignal pops as numerical order (not character). This is only needed if the populations are numbered and sorted incorrectly by default.
+clumpp$orig.pop <- as.numeric(clumpp$orig.pop)
+clumpp <- clumpp %>% arrange(orig.pop)
+
+#print(clumpp)
 save(clumpp, file = paste(dir,"/",description,"_clumpp_",k, ".rdata",sep=""))
 write.csv(clumpp, file = paste(dir,"/",description,"_",stratum,"_clumpp_",k, ".csv",sep=""))
 # Plot CLUMPP results and print out each chart for k=1-max.k 
