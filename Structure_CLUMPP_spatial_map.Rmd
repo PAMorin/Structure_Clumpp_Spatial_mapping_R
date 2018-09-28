@@ -90,7 +90,7 @@ data3<-merge(not.mono.df,other)
 # re-order the dataframe to put Lat/Lon columns after labid's
 latlon <- c("labid", "Latitude", "Longitude")
 data3 <- data3[, c(latlon, setdiff(names(data3), latlon))]
-data3 <- data3 %>% arrange(desc(strata), labid) # sort by strata column (decreasing)
+data3 <- data3 %>% arrange(strata, labid) # sort by strata column (increasing); for increasing, change to "arrange(desc(strata), labid)"
 
 # save list of monomorphic loci to a .csv file
 mono<-alleleNum < 2
@@ -229,9 +229,9 @@ for(k in 2:max.k) {
                      greedy.option = "ran.order", repeats = clumpp.reps,
                      sim.stat = "g", delete.files = TRUE, label=description)
 
-# Sort clummp orignal pops as numerical order (not character). This is only needed if the populations are numbered and sorted incorrectly by default.
-clumpp$orig.pop <- as.numeric(clumpp$orig.pop)
-clumpp <- clumpp %>% arrange(orig.pop)
+# Sort clummp orignal pops as numerical order (not character). This is only needed if the populations are numbered and sorted incorrectly by default. This may sort the populations differently for the map than for the q-matrix
+#clumpp$orig.pop <- as.numeric(clumpp$orig.pop)
+#clumpp <- clumpp %>% arrange(orig.pop)
 
 #print(clumpp)
 save(clumpp, file = paste(dir,"/",description,"_clumpp_",k, ".rdata",sep=""))
